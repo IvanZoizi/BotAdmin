@@ -6,6 +6,7 @@ import datetime, time, threading, json
 
 import bot2
 from db import DB
+from pprint import pprint
 
 
 # ---- MAIN VARIABLES -----------------------------------------------------------------------------
@@ -193,22 +194,28 @@ def save_loop(main_bot, add_bot):
                         later_msgs.append(msg)
                 except:
                     continue
-            
+            for key in users_dict:
+                try:
+                    users_dict[key]['new_msg']['entities'] = []
+                    users_dict[key]['new_msg']['endpoint_date'] = [int(i) for i in users_dict[key]['new_msg']['endpoint_date'].strftime('%Y.%m.%d').split('.')]
+                except Exception as ex:
+                    continue
+            pprint(users_dict)
             save_data = {
                 'main_bot': {
-                    'bot_password': main_bot.bot_password,
-                    'chat_ids': main_bot.chat_ids,
-                    'chat_titles': main_bot.chat_titles,
-                    'users': users_dict,
-                    'later_msgs': later_msgs
+                    'bot_password': str(main_bot.bot_password),
+                    'chat_ids': list(main_bot.chat_ids),
+                    'chat_titles': list(main_bot.chat_titles),
+                    'users': dict(users_dict),
+                    'later_msgs': list(later_msgs)
                 },
                 'add_bot': {
-                    'users': add_users_dict,
-                    'group_ids': add_bot.group_ids,
-                    'admin_list': add_bot.admin_list,
+                    'users': dict(add_users_dict),
+                    'group_ids': list(add_bot.group_ids),
+                    'admin_list': list(add_bot.admin_list),
                 }
             }
-
+            print(save_data)
             db.save_all(config.DB_TABLE_NAME, json.dumps(save_data))
         except Exception as ex:
             print(f'[ERROR] save to db - {ex}')
@@ -283,66 +290,69 @@ def wait_n_seconds_later(bot, user, seconds, msg_to_edit=None):
 
 
 def send_msg(bot, chat_id, msg, reply_markup=None):
-    if msg['group_id'] is None:
-        # One photo/video send
-        if reply_markup is None:
-            # Without keyboard
-            if len(msg['media_photo']) != 0 and msg['msg_caption'] is not None:
-                msg_response = bot.bot.send_photo(chat_id=chat_id,
-                                photo=download_file(bot, msg['media_photo'][0]),
-                                caption=msg['msg_caption'],
-                                caption_entities=msg['msg_caption_entities'])
-            elif len(msg['media_photo']) != 0:
-                msg_response = bot.bot.send_photo(chat_id=chat_id,
-                                photo=download_file(bot, msg['media_photo'][0]))
-            elif len(msg['media_video']) != 0 and msg['msg_caption'] is not None:
-                msg_response = bot.bot.send_video(chat_id=chat_id,
-                                    video=download_file(bot, msg['media_video'][0]),
+    try:
+        if msg['group_id'] is None:
+            # One photo/video send
+            if reply_markup is None:
+                # Without keyboard
+                if len(msg['media_photo']) != 0 and msg['msg_caption'] is not None:
+                    msg_response = bot.bot.send_photo(chat_id=chat_id,
+                                    photo=download_file(bot, msg['media_photo'][0]),
                                     caption=msg['msg_caption'],
                                     caption_entities=msg['msg_caption_entities'])
-            elif len(msg['media_video']) != 0:
-                msg_response = bot.bot.send_video(chat_id=chat_id,
-                                    video=download_file(bot, msg['media_video'][0]))
+                elif len(msg['media_photo']) != 0:
+                    msg_response = bot.bot.send_photo(chat_id=chat_id,
+                                    photo=download_file(bot, msg['media_photo'][0]))
+                elif len(msg['media_video']) != 0 and msg['msg_caption'] is not None:
+                    msg_response = bot.bot.send_video(chat_id=chat_id,
+                                        video=download_file(bot, msg['media_video'][0]),
+                                        caption=msg['msg_caption'],
+                                        caption_entities=msg['msg_caption_entities'])
+                elif len(msg['media_video']) != 0:
+                    msg_response = bot.bot.send_video(chat_id=chat_id,
+                                        video=download_file(bot, msg['media_video'][0]))
+                else:
+                    msg_response = bot.bot.send_message(chat_id=chat_id,
+                                        text=msg['msg_text'],
+                                        entities=msg['entities'])
             else:
-                msg_response = bot.bot.send_message(chat_id=chat_id,
-                                    text=msg['msg_text'],
-                                    entities=msg['entities'])
-        else:
-            # With keyboard '<< Закрыть'
-            if len(msg['media_photo']) != 0 and msg['msg_caption'] is not None:
-                msg_response = bot.bot.send_photo(chat_id=chat_id,
-                                photo=download_file(bot, msg['media_photo'][0]),
-                                caption=msg['msg_caption'],
-                                caption_entities=msg['msg_caption_entities'],
-                                reply_markup=reply_markup)
-            elif len(msg['media_photo']) != 0:
-                msg_response = bot.bot.send_photo(chat_id=chat_id,
-                                photo=download_file(bot, msg['media_photo'][0]),
-                                reply_markup=reply_markup)
-            elif len(msg['media_video']) != 0 and msg['msg_caption'] is not None:
-                msg_response = bot.bot.send_video(chat_id=chat_id,
-                                    video=download_file(bot, msg['media_video'][0]),
+                # With keyboard '<< Закрыть'
+                if len(msg['media_photo']) != 0 and msg['msg_caption'] is not None:
+                    msg_response = bot.bot.send_photo(chat_id=chat_id,
+                                    photo=download_file(bot, msg['media_photo'][0]),
                                     caption=msg['msg_caption'],
                                     caption_entities=msg['msg_caption_entities'],
                                     reply_markup=reply_markup)
-            elif len(msg['media_video']) != 0:
-                msg_response = bot.bot.send_video(chat_id=chat_id,
-                                    video=download_file(bot, msg['media_video'][0]),
+                elif len(msg['media_photo']) != 0:
+                    msg_response = bot.bot.send_photo(chat_id=chat_id,
+                                    photo=download_file(bot, msg['media_photo'][0]),
                                     reply_markup=reply_markup)
-            else:
-                msg_response = bot.bot.send_message(chat_id=chat_id,
-                                    text=msg['msg_text'],
-                                    reply_markup=reply_markup,
-                                    entities=msg['entities'])
-    else:
-        # Many photo/video send (media-group)
-        media_photo_arr = [InputMediaPhoto(download_file(bot, one)) for one in msg['media_photo']]
-        media_video_arr = [InputMediaVideo(download_file(bot, one)) for one in msg['media_video']]
-        media_arr = media_photo_arr + media_video_arr
-        media_arr[-1].caption = msg['msg_caption']
-        media_arr[-1].caption_entities = msg['msg_caption_entities']
-        msg_response = bot.bot.send_media_group(chat_id, media_arr)
-    return msg_response
+                elif len(msg['media_video']) != 0 and msg['msg_caption'] is not None:
+                    msg_response = bot.bot.send_video(chat_id=chat_id,
+                                        video=download_file(bot, msg['media_video'][0]),
+                                        caption=msg['msg_caption'],
+                                        caption_entities=msg['msg_caption_entities'],
+                                        reply_markup=reply_markup)
+                elif len(msg['media_video']) != 0:
+                    msg_response = bot.bot.send_video(chat_id=chat_id,
+                                        video=download_file(bot, msg['media_video'][0]),
+                                        reply_markup=reply_markup)
+                else:
+                    msg_response = bot.bot.send_message(chat_id=chat_id,
+                                        text=msg['msg_text'],
+                                        reply_markup=reply_markup,
+                                        entities=msg['entities'])
+        else:
+            # Many photo/video send (media-group)
+            media_photo_arr = [InputMediaPhoto(download_file(bot, one)) for one in msg['media_photo']]
+            media_video_arr = [InputMediaVideo(download_file(bot, one)) for one in msg['media_video']]
+            media_arr = media_photo_arr + media_video_arr
+            media_arr[-1].caption = msg['msg_caption']
+            media_arr[-1].caption_entities = msg['msg_caption_entities']
+            msg_response = bot.bot.send_media_group(chat_id, media_arr)
+        return msg_response
+    except Exception as ex:
+        pass
         
 
 def post_loop(bot):
@@ -356,7 +366,6 @@ def post_loop(bot):
             if msg is None:
                 bot.later_msgs.pop(bot.later_msgs.index(None))
                 continue
-
             if msg['endpoint_date'] is not None and datetime.datetime.now() >= msg['endpoint_date']:
                 continue
             
@@ -562,7 +571,7 @@ class Bot:
                                                                              [(int(id) in cur_user.chat_ids_sender or str(id) in cur_user.chat_ids_sender) for id in self.chat_ids], 
                                                                              self.chat_titles))
             elif message.text == 'Запланированные публикации':
-                
+
                 while None in self.later_msgs:
                     self.later_msgs.pop(self.later_msgs.index(None))
                 
@@ -581,6 +590,7 @@ class Bot:
                 else:
                     text = ''
                     week_days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+                    print(self.later_msgs)
                     for msg_i in range(len(self.later_msgs)):
                             
                         # Count of the letters in the post
@@ -1461,17 +1471,17 @@ class Bot:
                     threading.Thread(target=wait_n_seconds_later, args=(self, self.find_user(message.chat.id), 5, msg_to_edit,)).start()
 
 
-        def edit_endpoint_date(message, msg_to_edit):
+        def edit_endpoint_date(message, edit_msg):
             if message.text == '<< Назад':
                 msg = self.bot.send_message(chat_id=message.chat.id,
                                       text='== Изменение объявления ==\n\nВыберите, что Вы хотите изменить:',
                                       reply_markup=keyboard.later_msg_edit_choose())
-                self.bot.register_next_step_handler(msg, later_msg_edit_choose, msg_to_edit)
+                self.bot.register_next_step_handler(msg, later_msg_edit_choose, edit_msg)
             else:
                 try:
                     day, month, year = list(map(int, message.text.split('.')))
-                    msg_to_edit['endpoint_date'] = datetime.datetime(year, month, day)
-                    print(msg_to_edit)
+                    edit_msg['endpoint_date'] = datetime.datetime(year, month, day)
+                    print(edit_msg)
                     self.bot.send_message(chat_id=message.chat.id,
                                           text='Конечная дата успешно изменена!',
                                           reply_markup=keyboard.menu())
@@ -1479,7 +1489,7 @@ class Bot:
                     msg = self.bot.send_message(chat_id=message.chat.id,
                                                     text='Неккоректный ввод даты!\nВведите конечную дату публикации (дд.мм.гггг):',
                                                     reply_markup=keyboard.back_continue())
-                    self.bot.register_next_step_handler(msg, edit_endpoint_date, msg_to_edit)
+                    self.bot.register_next_step_handler(msg, edit_endpoint_date, edit_msg)
                     return
 
 # -------------------------------------------------------------------------------------------------
